@@ -51,8 +51,13 @@ def _atomic_write(final_path, data, out_dir):
     for _attempt in range(10):
         fd = None
         tmp = None
-        fd, tmp = tempfile.mkstemp(prefix=".entry.txt.", dir=out_dir)
         try:
+            # Inside the try on purpose: mkstemp is the call that raises
+            # FileExistsError when a stale temp name collides, so the
+            # retry below can only fire while the call is guarded by it.
+            # (Previously mkstemp sat outside the try, so the retry was
+            # dead code: a collision propagated instead of retrying.)
+            fd, tmp = tempfile.mkstemp(prefix=".entry.txt.", dir=out_dir)
             _write_all(fd, data)
             os.fsync(fd)
             os.close(fd)
@@ -74,7 +79,8 @@ def _atomic_write(final_path, data, out_dir):
             except OSError:
                 pass
             try:
-                os.unlink(tmp)
+                if tmp is not None:
+                    os.unlink(tmp)
             except FileNotFoundError:
                 pass
         finally:
